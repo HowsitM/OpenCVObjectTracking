@@ -2,8 +2,6 @@ import javax.swing.*;
 import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import javax.swing.JPanel;
-
-import com.sun.corba.se.impl.orbutil.graph.Graph;
 import org.opencv.core.Mat;
 
 public class Panel  extends JPanel {
@@ -56,7 +54,6 @@ public class Panel  extends JPanel {
         image2.getRaster().setDataElements(0, 0, cols, rows, data);
         return image2;
     }
-
 
     @Override
     protected void paintComponent(Graphics g) {

@@ -28,15 +28,14 @@ public class MotionTracker {
         return timeNow;
     }
 
-
     public static void main(String[] args) {
         //Load opencv native library
-            System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 
         JFrame frame1 = new JFrame("Video Feed");
         frame1.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame1.setSize(640,480);
-        frame1.setBounds(0,0,frame1.getWidth(),frame1.getHeight());
+        frame1.setSize(640, 480);
+        frame1.setBounds(0, 0, frame1.getWidth(), frame1.getHeight());
         Panel panel1 = new Panel();
         frame1.setContentPane(panel1);
         frame1.setVisible(true);
@@ -48,17 +47,9 @@ public class MotionTracker {
         System.out.println(capture.isOpened());
 
         Mat videoImage = new Mat();
-        Mat thresholded = new Mat();
-        Mat thresholded2 = new Mat();
 
         capture.read(videoImage);
-        frame1.setSize(videoImage.width()+40, videoImage.height()+60);
-        //define the colour depth, number of channels and channel layout in the image.
-        //CV_8UC1 is a gray scale image.
-        Mat array255 = new Mat(videoImage.height(),videoImage.width(), CvType.CV_8UC1);
-        array255.setTo(new Scalar(255));
-        Mat distance = new Mat(videoImage.height(), videoImage.width(), CvType.CV_8UC1);
-        List<Mat> lhsv = new ArrayList<>(3);
+        frame1.setSize(videoImage.width() + 40, videoImage.height() + 60);
 
         //System Variables
         double yUpper = 75;         //exclude the event if y less than this value
@@ -99,17 +90,31 @@ public class MotionTracker {
         Mat prevImage = new Mat();
 
         System.out.println("Starting Camera feed...");
-
         System.out.println(capture.isOpened());
-        if(capture.isOpened())
-        {
-            while(true)
-            {
+
+        Mat thresholded = new Mat();
+
+        if (capture.isOpened()) {
+            while (true) {
                 capture.read(videoImage); //grabs the next frame from the video file.
-                if (!videoImage.empty())
-                {
-                    double fps = capture.get(Videoio.CAP_PROP_FPS);
-                    System.out.println("FPS: " + fps);
+                //get Image1
+                Mat Image1 = videoImage;
+                //GreyScale Image1
+                Mat Image1Gray = new Mat();
+                Imgproc.cvtColor(Image1, Image1Gray, Imgproc.COLOR_BGR2GRAY);
+                Mat absDifference = new Mat();
+                //Start Loop
+                while (true) {
+                    //Get Image2
+                    Mat Image2 = new Mat();
+                    capture.read(Image2);
+
+                    //Grayscale Image2
+                    Mat Image2Gray = new Mat();
+                    Imgproc.cvtColor(Image2, Image2Gray, Imgproc.COLOR_BGR2GRAY);
+
+                    //absDiff image subtract image 1 from image2
+                    Core.absdiff(Image2Gray, Image1Gray, absDifference);
 
                     frameCount = 0;
                     fpsTime = getTimeNow();
@@ -118,48 +123,12 @@ public class MotionTracker {
                     startPosX = 0;
                     endPosX = 0;
 
-                    double xBuf = (int)((xRight-xLeft) / 10);
-                    double yBuf = (int)((yLower-yUpper) / 8);
+                    double xBuf = (int) ((xRight - xLeft) / 10);
+                    double yBuf = (int) ((yLower - yUpper) / 8);
 
-                    System.out.println("Start Speed Motion Tracking!");
-                    String travelDirection = "";
-                    //initialise a cropped grayscale image
-
-                    Mat Image2 = new Mat();
-                    capture.read(videoImage);
-
-                    //param1:the image you are taking, param2: the image to be param3: what you are doing
-                    Imgproc.cvtColor(videoImage, Image2 ,Imgproc.COLOR_BGR2GRAY);
-
-                    eventTimer = getTimeNow();
-                    //initialize prevImage used for taking speed image photo.
-                    prevImage = Image2;
-
-                    boolean stillScanning = true;
-
-                    while(stillScanning){
-
-
-
-
-
-
-
-                    }
-
-                    Core.split(videoImage, lhsv); // We get 3 2D one channel Mats
-                    Mat S = lhsv.get(1);
-                    Mat V = lhsv.get(2);
-                    Core.subtract(array255, S, S);
-                    Core.subtract(array255, V, V);
-                    S.convertTo(S, CvType.CV_32F);
-                    V.convertTo(V, CvType.CV_32F);
-
-                    panel1.setImageWithMat(Image2);
+                    panel1.setImageWithMat(absDifference);
                     frame1.repaint();
-
                 }
-
             }
         }
         return;
