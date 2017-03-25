@@ -5,6 +5,8 @@ import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.videoio.VideoCapture;
 import org.opencv.videoio.Videoio;
+import sun.plugin.javascript.navig.*;
+
 import javax.swing.*;
 import java.awt.*;
 import java.text.DateFormat;
@@ -93,6 +95,7 @@ public class MotionTracker {
         System.out.println(capture.isOpened());
 
         Mat thresholded = new Mat();
+        Mat thresholded2 = new Mat();
 
         if (capture.isOpened()) {
             while (true) {
@@ -116,17 +119,32 @@ public class MotionTracker {
                     //absDiff image subtract image 1 from image2
                     Core.absdiff(Image2Gray, Image1Gray, absDifference);
 
-                    frameCount = 0;
+                    //Get the threshold of the difference image based on the threshold sensitivity variable
+                    Imgproc.threshold(absDifference, thresholded, 100,255, Imgproc.THRESH_BINARY);
+
+                    //Blur the thresholded Image
+                    Mat blurredImage = new Mat();
+                    Imgproc.GaussianBlur(thresholded, blurredImage, new Size(45,45) , 1);
+
+                    //Prepare for reading next image 2
+                    Image1Gray = Image2Gray;
+
+                    //Get Contours in blurred Image
+
+
+
+
+
+                   /* frameCount = 0;
                     fpsTime = getTimeNow();
                     firstEvent = true;
                     eventTimer = getTimeNow();
                     startPosX = 0;
                     endPosX = 0;
-
                     double xBuf = (int) ((xRight - xLeft) / 10);
-                    double yBuf = (int) ((yLower - yUpper) / 8);
+                    double yBuf = (int) ((yLower - yUpper) / 8);*/
 
-                    panel1.setImageWithMat(absDifference);
+                    panel1.setImageWithMat(blurredImage);
                     frame1.repaint();
                 }
             }
