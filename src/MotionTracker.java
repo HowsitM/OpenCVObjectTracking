@@ -22,21 +22,17 @@ public class MotionTracker {
 
     public static double getTimeNow(){
 
-        return System.currentTimeMillis()%1000;
+        return System.nanoTime();
     }
 
     public static double convertSpeed(double contourWidth){
-        double speed = 0;
-
+        double speed;
         double objectMM = 68.58;
         double objectPx = contourWidth;
 
-        speed = (objectMM/objectPx * 0.0036);
-
+        speed = ((objectMM / objectPx) * 0.0036);
         return speed;
     }
-
-
 
     public static void main(String[] args) {
         //Load opencv native library
@@ -57,11 +53,8 @@ public class MotionTracker {
         System.out.println(capture.isOpened());
 
         Mat videoImage = new Mat();
-
         capture.read(videoImage);
         frame1.setSize(videoImage.width() + 40, videoImage.height() + 60);
-
-        //Motion event settings
 
         //set variables
         double frameCount;
@@ -70,15 +63,16 @@ public class MotionTracker {
         double eventTimer = getTimeNow();
         double startPosX = 0;
         double endPosX = 0;
-        double averageSpeed = 0.0;
+        Double averageSpeed1 = 0.0;
+        Double averageSpeed2 = 0.0;
+        double ReturnSpeed;
 
         int cx = 0;
         int cy = 0;
-        int mx = 0;
-        int my = 0;
-        int mw = 0;
-        int mh = 0;
-
+        int mx;
+        int my;
+        int mw;
+        int mh;
 
         System.out.println("Starting Camera feed...");
         System.out.println(capture.isOpened());
@@ -91,108 +85,120 @@ public class MotionTracker {
         double totalTrackDist;
         int x, y, w, h;
 
-        if (capture.isOpened()) {
 
-            while (true) {
-                capture.read(videoImage); //grabs the next frame from the video file.
-                //get Image1
-                Mat Image1 = videoImage;
-                //GreyScale Image1
-                Mat Image1Gray = new Mat();
-                Imgproc.cvtColor(Image1, Image1Gray, Imgproc.COLOR_BGR2GRAY);
-                Mat absDifference = new Mat();
-                //Start Loop
-                List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
-                double endTime;
-                double totalTrackTime;
-                int xDiffMin = 1;
-                int xDiffMax = 50;
-
+        try{
+            if (capture.isOpened()) {
                 while (true) {
-                    //Get Image2
-                    Mat Image2 = new Mat();
-                    capture.read(Image2);
+                    capture.read(videoImage); //grabs the next frame from the video file.
+                    //get Image1
+                    Mat Image1 = videoImage;
+                    //GreyScale Image1
+                    Mat Image1Gray = new Mat();
+                    Imgproc.cvtColor(Image1, Image1Gray, Imgproc.COLOR_BGR2GRAY, 4);
+                    Mat absDifference = new Mat();
+                    //Start Loop
+                    List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
+                    double endTime;
+                    double totalTrackTime;
+                    int xDiffMin = 1;
+                    int xDiffMax = 50;
 
-                    //Grayscale Image2
-                    Mat Image2Gray = new Mat();
-                    Imgproc.cvtColor(Image2, Image2Gray, Imgproc.COLOR_BGR2GRAY);
+                    while (true) {
+                        //Get Image2
+                        Mat Image2 = new Mat();
+                        capture.read(Image2);
 
-                    //absDiff image subtract image 1 from image2
-                    Core.absdiff(Image2Gray, Image1Gray, absDifference);
+                        //Grayscale Image2
+                        Mat Image2Gray = new Mat();
+                        Imgproc.cvtColor(Image2, Image2Gray, Imgproc.COLOR_BGR2GRAY, 4);
 
-                    //Get the threshold of the difference image based on the threshold sensitivity variable
-                    Imgproc.threshold(absDifference, thresholded, 100, 255, Imgproc.THRESH_BINARY);
+                        //absDiff image subtract image 1 from image2
+                        Core.absdiff(Image2Gray, Image1Gray, absDifference);
 
-                    //Blur the thresholded Image
-                    Mat blurredImage = new Mat();
-                    Imgproc.GaussianBlur(thresholded, blurredImage, new Size(45, 45), 1);
+                        //Get the threshold of the difference image based on the threshold sensitivity variable
+                        Imgproc.threshold(absDifference, thresholded, 100, 255, Imgproc.THRESH_BINARY);
 
-                    //Prepare for reading next image 2
-                    Image1Gray = Image2Gray;
+                        //Blur the thresholded Image
+                        Mat blurredImage = new Mat();
+                        Imgproc.GaussianBlur(thresholded, blurredImage, new Size(45, 45), 1);
 
-                    //Get Contours in blurred Image
-                    Imgproc.findContours(blurredImage, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+                        //Prepare for reading next image 2
+                        Image1Gray = Image2Gray;
 
-                    //Loop contours and get the biggest one.
-                    int totalContours = contours.size();
-                    System.out.println("C: " + totalContours);
-                    Image1Gray = Image2Gray;
-                    Imgproc.HoughCircles(blurredImage, circles, Imgproc.CV_HOUGH_GRADIENT, 2, blurredImage.height(), 500, 50, 0, 0);
+                        //Get Contours in blurred Image
+                        Imgproc.findContours(blurredImage, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
 
-                    double foundArea;
-                    for (MatOfPoint c : contours) {
-                        foundArea = Imgproc.contourArea(c);
+                        //Loop contours and get the biggest one.
+                        int totalContours = contours.size();
+                        System.out.println("C: " + totalContours);
+                        Image1Gray = Image2Gray;
+                        Imgproc.HoughCircles(blurredImage, circles, Imgproc.CV_HOUGH_GRADIENT, 2, blurredImage.height(), 500, 50, 0, 0);
 
-                        if (foundArea > biggestArea) {
+                        double foundArea;
+                        for (MatOfPoint c : contours) {
+                            foundArea = Imgproc.contourArea(c);
+                            if (foundArea >= biggestArea) {
 
-                            boolean motionFound = true;
-                            biggestArea = foundArea;
-                            for (int i = 0; i < contours.size(); i++) {
-                                Imgproc.drawContours(blurredImage, contours, i, new Scalar(255, 255, 255), 2);
-                            }
-                            Rect bb = Imgproc.boundingRect(c);
-                            x = bb.x;
-                            y = bb.y;
-                            w = bb.width;
-                            h = bb.height;
-                            cx = (int) ((x + w) / 2);
-                            cy = (int) ((y + h) / 2);
-                            mx = x;
-                            my = y;
-                            mw = w;
-                            mh = h;
-
-                            if (motionFound) {
-                                //process motion event and track data
-                                //This is the first valid motion event
-                                if (firstEvent) {
-                                    firstEvent = false;
-                                    startPosX = cx;
-                                    endPosX = cx;
-                                    startTimer = getTimeNow();
-                                    System.out.println("New Track - Start Time: " + startTimer + " - Motion at: " + "x:" + cx + " y: " + cy);
+                                boolean motionFound = true;
+                                biggestArea = foundArea;
+                                for (int i = 0; i < contours.size(); i++) {
+                                    Imgproc.drawContours(blurredImage, contours, i, new Scalar(255, 255, 255), 2);
                                 }
-                                else if (Math.abs(cx - endPosX) > xDiffMin && Math.abs(cx - endPosX) < xDiffMax) {
-                                    //movement is within acceptable distance range of last event
-                                    endPosX = cx;
-                                    endTime = getTimeNow();
-                                    totalTrackDist = Math.abs(endPosX - startPosX);
-                                    totalTrackTime = Math.abs(endTime - startTimer);
-                                    averageSpeed = (float) Math.abs((totalTrackDist / totalTrackTime)) * (0.621371 * convertSpeed(bb.width));
-                                    System.out.println("Average Speed " + averageSpeed);
+                                Rect bb = Imgproc.boundingRect(c);
+                                x = bb.x;
+                                y = bb.y;
+                                w = bb.width;
+                                h = bb.height;
+                                cx = ((x + w) / 2 );
+                                cy = ((y + h) / 2 );
+                                mx = x;
+                                my = y;
+                                mw = w;
+                                mh = h;
 
-                                startPosX = 0;
-                                endPosX = 0;
-                                firstEvent = true;
+                                if (motionFound) {
+                                    //process motion event and track data
+                                    //This is the first valid motion event
+                                    if (firstEvent) {
+                                        firstEvent = false;
+                                        startPosX = cx;
+                                        endPosX = cx;
+                                        startTimer = getTimeNow();
+                                        System.out.println("New Track - Start Time: " + startTimer + " - Motion at: " + "x:" + cx + " y: " + cy);
+                                    }
+                                    else if (Math.abs(cx - endPosX) > xDiffMin && Math.abs(cx - endPosX) < xDiffMax) {
+                                        //movement is within acceptable distance range of last event
+                                        endPosX = cx;
+                                        endTime = getTimeNow();
+                                        double FPS = capture.get(Videoio.CAP_PROP_FPS);
+                                        totalTrackDist = Math.abs(endPosX - startPosX);
+                                        //converts nanotime to seconds
+                                        totalTrackTime = Math.abs((endTime - startTimer) / 1000000000);
+                                        double elapsedTime = totalTrackTime;
+                                        averageSpeed1 = (double) Math.abs((totalTrackDist / (totalTrackTime)));
+                                        averageSpeed2 = averageSpeed1 * (0.621371 * convertSpeed(mw));
+                                        System.out.println("Average Speed " + (180 / averageSpeed2) + " @ FPS: " + FPS);
+
+                                        startPosX = 0;
+                                        endPosX = 0;
+                                        firstEvent = true;
+                                    }
+                                }
                             }
                         }
+                        panel1.setImageWithMat(blurredImage);
+                        frame1.repaint();
+
+                        if(averageSpeed2 != null){
+                            ReturnSpeed = averageSpeed2;
+                            System.out.println(ReturnSpeed);
                         }
                     }
-                    panel1.setImageWithMat(blurredImage);
-                    frame1.repaint();
                 }
             }
         }
+        catch (Exception e)
+        {e.printStackTrace();}
         return;
     }
 }
