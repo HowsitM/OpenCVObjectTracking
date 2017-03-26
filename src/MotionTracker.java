@@ -12,6 +12,7 @@ import java.awt.*;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.math.*;
@@ -19,16 +20,23 @@ import java.math.*;
 public class MotionTracker {
 
 
-    public static String getTimeNow(){
-        String timeNow;
+    public static double getTimeNow(){
 
-        DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss");
-        Date dateObj = new Date();
-        System.out.println(df.format(dateObj));
-        timeNow = df.format(dateObj);
-
-        return timeNow;
+        return System.currentTimeMillis()%1000;
     }
+
+    public static double convertSpeed(double contourWidth){
+        double speed = 0;
+
+        double objectMM = 68.58;
+        double objectPx = contourWidth;
+
+        speed = (objectMM/objectPx * 0.0036);
+
+        return speed;
+    }
+
+
 
     public static void main(String[] args) {
         //Load opencv native library
@@ -53,51 +61,38 @@ public class MotionTracker {
         capture.read(videoImage);
         frame1.setSize(videoImage.width() + 40, videoImage.height() + 60);
 
-        //System Variables
-        double yUpper = 75;         //exclude the event if y less than this value
-        double yLower = 185;        //exclude event if y is greater than this value
-        double xLeft = 75;          //exclude event if x less that this px position
-        double xRight = 295;        //exclude event if x greater than this px position
-        //Display and log settings
-        Boolean displayFPS = false;
-
         //Motion event settings
-        Boolean SPEED_MPH = true;       //set the speed conversion kph = false mph = true
-        double trackLenTrig = 75;       //Length of track to trigger speed photo
-        double trackTimeout = 1;        //Number of seconds to wait after track end(prevents dual tracking)
-        double eventTimeout = 2;        //Number of seconds to wait for next motion event before starting new track
-
-        //Camera settings
-        double CameraWidth = 320;       //Image stream width for opencv motion scanning
-        double CameraHeight = 240;      //Image stream height for opencv motion scanning
-        double CameraFrameRate = 240;   //framerate for video stream
-
-        //OpenCV motion settings
-        boolean showCircle = true;      //true = circle in center of motion, false = rectangle
-        int circleSize = 2;             //diameter circle in px if showCircle is true
-        int lineThickness = 1;          //size of lines for circle or rectangle
-        double fontScale = 0.5;         //opencv window text font size scalling factor (lower is smaller)
-        int windowBigger = 1;           //resize multiplier for opencv window
-        int blurSize = 10;              //OpenCV setting for Gaussian difference image blur
-        int ThresholdSensitivity = 20;  //OpenCV setting for difference image threshold
 
         //set variables
         double frameCount;
         String fpsTime;
-        Boolean firstEvent;
-        String eventTimer = getTimeNow();
-        double startPosX;
+        Boolean firstEvent = true;
+        double eventTimer = getTimeNow();
+        double startPosX = 0;
         double endPosX = 0;
         double averageSpeed = 0.0;
-        Mat prevImage = new Mat();
+
+        int cx = 0;
+        int cy = 0;
+        int mx = 0;
+        int my = 0;
+        int mw = 0;
+        int mh = 0;
+
 
         System.out.println("Starting Camera feed...");
         System.out.println(capture.isOpened());
 
         Mat thresholded = new Mat();
-        Mat thresholded2 = new Mat();
+        int MIN_AREA = 20;              //exclude all contours less than or equal to this sq-px area
+        Mat circles = new Mat();
+        double biggestArea = MIN_AREA;
+        double startTimer = 0;
+        double totalTrackDist;
+        int x, y, w, h;
 
         if (capture.isOpened()) {
+
             while (true) {
                 capture.read(videoImage); //grabs the next frame from the video file.
                 //get Image1
@@ -107,6 +102,12 @@ public class MotionTracker {
                 Imgproc.cvtColor(Image1, Image1Gray, Imgproc.COLOR_BGR2GRAY);
                 Mat absDifference = new Mat();
                 //Start Loop
+                List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
+                double endTime;
+                double totalTrackTime;
+                int xDiffMin = 1;
+                int xDiffMax = 50;
+
                 while (true) {
                     //Get Image2
                     Mat Image2 = new Mat();
@@ -120,30 +121,73 @@ public class MotionTracker {
                     Core.absdiff(Image2Gray, Image1Gray, absDifference);
 
                     //Get the threshold of the difference image based on the threshold sensitivity variable
-                    Imgproc.threshold(absDifference, thresholded, 100,255, Imgproc.THRESH_BINARY);
+                    Imgproc.threshold(absDifference, thresholded, 100, 255, Imgproc.THRESH_BINARY);
 
                     //Blur the thresholded Image
                     Mat blurredImage = new Mat();
-                    Imgproc.GaussianBlur(thresholded, blurredImage, new Size(45,45) , 1);
+                    Imgproc.GaussianBlur(thresholded, blurredImage, new Size(45, 45), 1);
 
                     //Prepare for reading next image 2
                     Image1Gray = Image2Gray;
 
                     //Get Contours in blurred Image
+                    Imgproc.findContours(blurredImage, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
 
+                    //Loop contours and get the biggest one.
+                    int totalContours = contours.size();
+                    System.out.println("C: " + totalContours);
+                    Image1Gray = Image2Gray;
+                    Imgproc.HoughCircles(blurredImage, circles, Imgproc.CV_HOUGH_GRADIENT, 2, blurredImage.height(), 500, 50, 0, 0);
 
+                    double foundArea;
+                    for (MatOfPoint c : contours) {
+                        foundArea = Imgproc.contourArea(c);
 
+                        if (foundArea > biggestArea) {
 
+                            boolean motionFound = true;
+                            biggestArea = foundArea;
+                            for (int i = 0; i < contours.size(); i++) {
+                                Imgproc.drawContours(blurredImage, contours, i, new Scalar(255, 255, 255), 2);
+                            }
+                            Rect bb = Imgproc.boundingRect(c);
+                            x = bb.x;
+                            y = bb.y;
+                            w = bb.width;
+                            h = bb.height;
+                            cx = (int) ((x + w) / 2);
+                            cy = (int) ((y + h) / 2);
+                            mx = x;
+                            my = y;
+                            mw = w;
+                            mh = h;
 
-                   /* frameCount = 0;
-                    fpsTime = getTimeNow();
-                    firstEvent = true;
-                    eventTimer = getTimeNow();
-                    startPosX = 0;
-                    endPosX = 0;
-                    double xBuf = (int) ((xRight - xLeft) / 10);
-                    double yBuf = (int) ((yLower - yUpper) / 8);*/
+                            if (motionFound) {
+                                //process motion event and track data
+                                //This is the first valid motion event
+                                if (firstEvent) {
+                                    firstEvent = false;
+                                    startPosX = cx;
+                                    endPosX = cx;
+                                    startTimer = getTimeNow();
+                                    System.out.println("New Track - Start Time: " + startTimer + " - Motion at: " + "x:" + cx + " y: " + cy);
+                                }
+                                else if (Math.abs(cx - endPosX) > xDiffMin && Math.abs(cx - endPosX) < xDiffMax) {
+                                    //movement is within acceptable distance range of last event
+                                    endPosX = cx;
+                                    endTime = getTimeNow();
+                                    totalTrackDist = Math.abs(endPosX - startPosX);
+                                    totalTrackTime = Math.abs(endTime - startTimer);
+                                    averageSpeed = (float) Math.abs((totalTrackDist / totalTrackTime)) * (0.621371 * convertSpeed(bb.width));
+                                    System.out.println("Average Speed " + averageSpeed);
 
+                                startPosX = 0;
+                                endPosX = 0;
+                                firstEvent = true;
+                            }
+                        }
+                        }
+                    }
                     panel1.setImageWithMat(blurredImage);
                     frame1.repaint();
                 }
